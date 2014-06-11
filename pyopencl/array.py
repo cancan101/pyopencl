@@ -71,6 +71,8 @@ def _create_vector_types():
 
     vec.types = {}
     vec.type_to_scalar_and_count = _DTypeDict()
+    
+    vec.type_to_scalar_and_count[np.dtype(np.complex64)] = (np.dtype(np.float32), 2)
 
     counts = [2, 3, 4, 8, 16]
 

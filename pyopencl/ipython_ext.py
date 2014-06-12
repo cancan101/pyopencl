@@ -1,16 +1,15 @@
 from __future__ import division
 
 from IPython.core.magic import (magics_class, Magics, cell_magic, line_magic)
-from IPython.core.magics.code import (CodeMagics)
-
 
 import pyopencl as cl
 
 
 @magics_class
 class PyOpenCLMagics(Magics):
-    @cell_magic
-    def cl_kernel(self, line, cell):
+    def _run_kernel(self, kernel, options):
+        kernel = kernel.encode("utf8")
+        options = options.encode("utf8").strip()
         try:
             ctx = self.shell.user_ns["cl_ctx"]
         except KeyError:
@@ -29,25 +28,41 @@ class PyOpenCLMagics(Magics):
             raise RuntimeError("unable to locate cl context, which must be "
                     "present in namespace as 'cl_ctx' or 'ctx'")
 
-        prg = cl.Program(ctx, cell.encode("utf8")).build(options=line.encode("utf8").strip())
+        prg = cl.Program(ctx, kernel).build(options=options)
 
         for knl in prg.all_kernels():
             self.shell.user_ns[knl.function_name] = knl
 
-@magics_class
-class PyOpenCLCodeMagics(CodeMagics):
-    @line_magic
-    def cl_kernel_file(self, line):
-        opts,args = self.parse_options(line,'o:f:')
 
-        header = "%%cl_kernel"
+    @cell_magic
+    def cl_kernel(self, line, cell):
+        kernel = cell
+        options = line
+        self._run_kernel(kernel, options)
+
+
+    def _load_kernel_and_options(self, line):
+        opts, args = self.parse_options(line,'o:f:')
 
         build_options = opts.get('o')
+        kernel = self.shell.find_user_code(opts.get('f') or args)
+
+        return kernel, build_options
+
+
+    @line_magic
+    def cl_run_kernel(self, line):
+        kernel, build_options = self._load_kernel_and_options(line)
+        self._run_kernel(kernel, build_options)
+
+
+    @line_magic
+    def cl_load_kernel(self, line):
+        kernel, build_options = self._load_kernel_and_options(line)
+        header = "%%cl_kernel"
 
         if build_options:
             header = "%s %s" % (header, build_options)
-
-        kernel = self.shell.find_user_code(opts.get('f') or args)
 
         content = "%s\n\n%s" % (header, kernel)
 
@@ -56,5 +71,3 @@ class PyOpenCLCodeMagics(CodeMagics):
 
 def load_ipython_extension(ip):
     ip.register_magics(PyOpenCLMagics)
-    ip.register_magics(PyOpenCLCodeMagics)
-
